@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -31,7 +30,6 @@ def load_data(path: str = "NR_dataset.xlsx") -> pd.DataFrame:
         st.error(f"Error loading dataset: {e}")
         st.stop()
 
-    # Normalize column names
     df.columns = (
         df.columns.str.strip()
         .str.lower()
@@ -43,7 +41,6 @@ def load_data(path: str = "NR_dataset.xlsx") -> pd.DataFrame:
 
 df_raw = load_data()
 
-# Logical required fields (normalized)
 required_fields = {
     "idx": "idx",
     "label": "label",
@@ -70,7 +67,6 @@ if missing:
     st.write("Available columns after normalization:", df_raw.columns.tolist())
     st.stop()
 
-# Rename for convenience (already normalized, but keep mapping explicit)
 col_idx = required_fields["idx"]
 col_label = required_fields["label"]
 col_customerid = required_fields["customerid"]
@@ -86,12 +82,10 @@ col_retailchannel = required_fields["retailchannel"]
 
 df = df_raw.copy()
 
-# Type conversions
 df[col_purchaseamount] = pd.to_numeric(df[col_purchaseamount], errors="coerce")
 df[col_customersatisfaction] = pd.to_numeric(df[col_customersatisfaction], errors="coerce")
 df[col_transactiondate] = pd.to_datetime(df[col_transactiondate], errors="coerce")
 
-# Data cleaning rules
 before_rows = len(df)
 df = df[
     (df[col_purchaseamount].notna()) &
@@ -112,11 +106,10 @@ if df.empty:
 
 
 # -----------------------------
-# Sidebar filters (layout inspired by Filters.pdf)
+# Sidebar filters
 # -----------------------------
 st.sidebar.header("Filters")
 
-# Date range filter
 min_date = df[col_transactiondate].min()
 max_date = df[col_transactiondate].max()
 
@@ -132,33 +125,27 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
 else:
     start_date, end_date = min_date.date(), max_date.date()
 
-# Helper to build multiselect with "All"
 def multiselect_with_all(label, series):
     unique_vals = sorted(series.dropna().unique())
     options = ["All"] + list(unique_vals)
     selected = st.sidebar.multiselect(label, options, default=["All"])
-    return selected, options
+    return selected
 
-label_sel, label_opts = multiselect_with_all("Segment (label)", df[col_label])
-region_sel, region_opts = multiselect_with_all("Region", df[col_customerregion])
-product_sel, product_opts = multiselect_with_all("Product Category", df[col_productcategory])
-channel_sel, channel_opts = multiselect_with_all("Retail Channel", df[col_retailchannel])
-gender_sel, gender_opts = multiselect_with_all("Gender", df[col_customergender])
-age_sel, age_opts = multiselect_with_all("Age Group", df[col_customeragegroup])
+label_sel = multiselect_with_all("Segment (label)", df[col_label])
+region_sel = multiselect_with_all("Region", df[col_customerregion])
+product_sel = multiselect_with_all("Product Category", df[col_productcategory])
+channel_sel = multiselect_with_all("Retail Channel", df[col_retailchannel])
+gender_sel = multiselect_with_all("Gender", df[col_customergender])
+age_sel = multiselect_with_all("Age Group", df[col_customeragegroup])
 
-# -----------------------------
-# Apply filters (without modifying original df)
-# -----------------------------
 df_filtered = df.copy()
 
-# Date filter
 mask_date = (
     (df_filtered[col_transactiondate] >= pd.to_datetime(start_date)) &
     (df_filtered[col_transactiondate] <= pd.to_datetime(end_date))
 )
 df_filtered = df_filtered[mask_date]
 
-# Categorical filters
 def apply_cat_filter(df_in, col, selected):
     if "All" in selected or len(selected) == 0:
         return df_in
@@ -179,76 +166,49 @@ if df_filtered.empty:
 # -----------------------------
 # KPI row
 # -----------------------------
-kpi_required_cols = [
-    col_purchaseamount,
-    col_transactionid,
-    col_customerid,
-    col_customersatisfaction,
-    col_label,
-]
-
-missing_kpi_cols = [c for c in kpi_required_cols if c not in df_filtered.columns]
-if missing_kpi_cols:
-    st.error(
-        "Cannot compute KPIs due to missing columns: "
-        + ", ".join(missing_kpi_cols)
-    )
-    st.stop()
-
 total_revenue = df_filtered[col_purchaseamount].sum()
 total_transactions = df_filtered[col_transactionid].nunique()
 unique_customers = df_filtered[col_customerid].nunique()
 avg_satisfaction = df_filtered[col_customersatisfaction].mean()
 
-# Share of revenue from Growth segment (label == "Growth")
-# Do not hardcode label values beyond using what's present
 growth_mask = df_filtered[col_label].str.lower() == "growth"
 growth_revenue = df_filtered.loc[growth_mask, col_purchaseamount].sum()
 share_growth_revenue = (growth_revenue / total_revenue * 100) if total_revenue > 0 else 0
 
-# Decline segment revenue
 decline_mask = df_filtered[col_label].str.lower() == "decline"
 decline_revenue = df_filtered.loc[decline_mask, col_purchaseamount].sum()
 
-kpi_col1, kpi_col2, kpi_col3, kpi_col4, kpi_col5, kpi_col6 = st.columns(6)
+k1, k2, k3, k4, k5, k6 = st.columns(6)
 
-kpi_col1.metric("Total Revenue", f"${total_revenue:,.2f}")
-kpi_col2.metric("Total Transactions", f"{total_transactions:,}")
-kpi_col3.metric("Unique Customers", f"{unique_customers:,}")
-kpi_col4.metric("Avg Satisfaction", f"{avg_satisfaction:.2f}" if not np.isnan(avg_satisfaction) else "N/A")
-kpi_col5.metric("Share of Revenue from Growth Segment", f"{share_growth_revenue:.1f}%")
-kpi_col6.metric("Decline Segment Revenue", f"${decline_revenue:,.2f}")
+k1.metric("Total Revenue", f"${total_revenue:,.2f}")
+k2.metric("Total Transactions", f"{total_transactions:,}")
+k3.metric("Unique Customers", f"{unique_customers:,}")
+k4.metric("Avg Satisfaction", f"{avg_satisfaction:.2f}")
+k5.metric("Share of Revenue from Growth Segment", f"{share_growth_revenue:.1f}%")
+k6.metric("Decline Segment Revenue", f"${decline_revenue:,.2f}")
 
 
 # -----------------------------
-# Core visualizations (layout inspired by Filters.pdf)
+# Core Visualizations
 # -----------------------------
 st.markdown("---")
 
-# Top row: Revenue by Segment & Revenue Trend
-top_left, top_right = st.columns(2)
+# Revenue by Segment + Revenue Trend
+left, right = st.columns(2)
 
-with top_left:
+with left:
     st.subheader("Revenue by Segment")
     seg_rev = (
-        df_filtered
-        .groupby(col_label, as_index=False)[col_purchaseamount]
+        df_filtered.groupby(col_label, as_index=False)[col_purchaseamount]
         .sum()
         .rename(columns={col_purchaseamount: "revenue"})
         .sort_values("revenue", ascending=False)
     )
-    if not seg_rev.empty:
-        fig_seg = px.bar(
-            seg_rev,
-            x=col_label,
-            y="revenue",
-            title="Revenue by Segment",
-        )
-        fig_seg.update_layout(xaxis_title="Segment", yaxis_title="Revenue")
-        st.plotly_chart(fig_seg, use_container_width=True)
+    fig_seg = px.bar(seg_rev, x=col_label, y="revenue", title="Revenue by Segment")
+    st.plotly_chart(fig_seg, use_container_width=True)
 
-with top_right:
-    st.subheader("Revenue Trend Over Time")
+with right:
+    st.subheader("Revenue Trend Over Time (Scatterplot)")
     color_choice = st.selectbox(
         "Color revenue trend by",
         options=[col_label, col_retailchannel],
@@ -257,85 +217,73 @@ with top_right:
 
     df_trend = df_filtered.copy()
     df_trend["month"] = df_trend[col_transactiondate].dt.to_period("M").dt.to_timestamp()
-    trend_group_cols = ["month", color_choice]
 
     trend = (
-        df_trend
-        .groupby(trend_group_cols, as_index=False)[col_purchaseamount]
+        df_trend.groupby(["month", color_choice], as_index=False)[col_purchaseamount]
         .sum()
         .rename(columns={col_purchaseamount: "revenue"})
-        .sort_values("month")
     )
 
-    if not trend.empty:
-        fig_trend = px.line(
-            trend,
-            x="month",
-            y="revenue",
-            color=color_choice,
-            title="Monthly Revenue Trend"
-        )
-        fig_trend.update_layout(xaxis_title="Month", yaxis_title="Revenue")
-        st.plotly_chart(fig_trend, use_container_width=True)
+    fig_trend = px.scatter(
+        trend,
+        x="month",
+        y="revenue",
+        color=color_choice,
+        title="Monthly Revenue Trend (Scatterplot)"
+    )
+    st.plotly_chart(fig_trend, use_container_width=True)
 
-# Middle row: Channel & Category Mix, Regional Performance
+
+# Middle row: Revenue by Product + Revenue by Region
 mid_left, mid_right = st.columns(2)
 
 with mid_left:
-    st.subheader("Channel and Category Mix")
+    st.subheader("Revenue by Product")
     cat_channel = (
-        df_filtered
-        .groupby([col_productcategory, col_retailchannel], as_index=False)[col_purchaseamount]
+        df_filtered.groupby([col_productcategory, col_retailchannel], as_index=False)[col_purchaseamount]
         .sum()
         .rename(columns={col_purchaseamount: "revenue"})
     )
-    # Sort categories by total revenue
     cat_order = (
         cat_channel.groupby(col_productcategory)["revenue"]
         .sum()
         .sort_values(ascending=False)
         .index.tolist()
     )
-    if not cat_channel.empty:
-        fig_cat = px.bar(
-            cat_channel,
-            x=col_productcategory,
-            y="revenue",
-            color=col_retailchannel,
-            category_orders={col_productcategory: cat_order},
-            title="Revenue by Product Category and Channel",
-            barmode="group"
-        )
-        fig_cat.update_layout(xaxis_title="Product Category", yaxis_title="Revenue")
-        st.plotly_chart(fig_cat, use_container_width=True)
+    fig_cat = px.bar(
+        cat_channel,
+        x=col_productcategory,
+        y="revenue",
+        color=col_retailchannel,
+        category_orders={col_productcategory: cat_order},
+        title="Revenue by Product",
+        barmode="group"
+    )
+    st.plotly_chart(fig_cat, use_container_width=True)
 
 with mid_right:
-    st.subheader("Regional Performance")
+    st.subheader("Revenue by Region")
     region_group = (
-        df_filtered
-        .groupby([col_customerregion, col_label], as_index=False)[col_purchaseamount]
+        df_filtered.groupby([col_customerregion, col_label], as_index=False)[col_purchaseamount]
         .sum()
         .rename(columns={col_purchaseamount: "revenue"})
     )
-    if not region_group.empty:
-        fig_region = px.bar(
-            region_group,
-            x=col_customerregion,
-            y="revenue",
-            color=col_label,
-            title="Revenue by Region (colored by Segment)",
-        )
-        fig_region.update_layout(xaxis_title="Region", yaxis_title="Revenue")
-        st.plotly_chart(fig_region, use_container_width=True)
+    fig_region = px.bar(
+        region_group,
+        x=col_customerregion,
+        y="revenue",
+        color=col_label,
+        title="Revenue by Region"
+    )
+    st.plotly_chart(fig_region, use_container_width=True)
 
 
 # -----------------------------
-# Early Warning Signals panel
+# Early Warning Signals
 # -----------------------------
 st.markdown("---")
 st.subheader("Early Warning Signals")
 
-# Segment-level summary
 seg_summary = (
     df_filtered
     .groupby(col_label)
@@ -348,130 +296,74 @@ seg_summary = (
     .reset_index()
 )
 
-# Overall metrics for heuristics
 overall_transactions = df_filtered[col_transactionid].nunique()
 overall_customers = df_filtered[col_customerid].nunique()
-overall_tx_per_customer = (
-    overall_transactions / overall_customers if overall_customers > 0 else np.nan
-)
+overall_tx_per_customer = overall_transactions / overall_customers if overall_customers > 0 else np.nan
 
-# Transactions per customer per segment
-seg_tx_per_customer = (
-    df_filtered
-    .groupby(col_label)
+seg_tx = (
+    df_filtered.groupby(col_label)
     .agg(
         seg_transactions=(col_transactionid, "nunique"),
         seg_customers=(col_customerid, "nunique"),
     )
     .reset_index()
 )
-seg_tx_per_customer["tx_per_customer"] = (
-    seg_tx_per_customer["seg_transactions"] / seg_tx_per_customer["seg_customers"]
-).replace([np.inf, -np.inf], np.nan)
-
-seg_summary = seg_summary.merge(seg_tx_per_customer[[col_label, "tx_per_customer"]], on=col_label, how="left")
+seg_tx["tx_per_customer"] = seg_tx["seg_transactions"] / seg_tx["seg_customers"]
+seg_summary = seg_summary.merge(seg_tx[[col_label, "tx_per_customer"]], on=col_label, how="left")
 
 st.dataframe(seg_summary, use_container_width=True)
 
-# Heuristic rules
 warnings_triggered = []
 
-# Rule 1: Low satisfaction
-low_sat_threshold = 3.0
-low_sat_segments = seg_summary[seg_summary["avg_satisfaction"] < low_sat_threshold][col_label].tolist()
+low_sat_segments = seg_summary[seg_summary["avg_satisfaction"] < 3.0][col_label].tolist()
 if low_sat_segments:
-    st.warning(
-        f"Low satisfaction detected in segments: {', '.join(map(str, low_sat_segments))} "
-        f"(avg satisfaction < {low_sat_threshold})."
-    )
+    st.warning(f"Low satisfaction detected in: {', '.join(low_sat_segments)}")
     warnings_triggered.append("low_satisfaction")
 
-# Rule 2: Lower engagement (transactions per customer below overall average)
-if not np.isnan(overall_tx_per_customer):
-    low_eng_segments = seg_summary[
-        seg_summary["tx_per_customer"] < overall_tx_per_customer
-    ][col_label].tolist()
-    if low_eng_segments:
-        st.warning(
-            "Lower engagement detected in segments: "
-            + ", ".join(map(str, low_eng_segments))
-            + " (transactions per customer below overall average)."
-        )
-        warnings_triggered.append("low_engagement")
+low_eng_segments = seg_summary[
+    seg_summary["tx_per_customer"] < overall_tx_per_customer
+][col_label].tolist()
+if low_eng_segments:
+    st.warning(f"Lower engagement detected in: {', '.join(low_eng_segments)}")
+    warnings_triggered.append("low_engagement")
 
-# Rule 3: High concentration risk (top 10 customers share)
 cust_revenue = (
-    df_filtered
-    .groupby(col_customerid, as_index=False)[col_purchaseamount]
+    df_filtered.groupby(col_customerid, as_index=False)[col_purchaseamount]
     .sum()
     .rename(columns={col_purchaseamount: "revenue"})
     .sort_values("revenue", ascending=False)
 )
-top_n_concentration = 10
-top_n = cust_revenue.head(top_n_concentration)
-top_n_share = (
-    top_n["revenue"].sum() / cust_revenue["revenue"].sum()
-    if not cust_revenue.empty and cust_revenue["revenue"].sum() > 0
-    else 0
-)
-concentration_threshold = 0.4  # adjustable in code
+top10 = cust_revenue.head(10)
+top10_share = top10["revenue"].sum() / cust_revenue["revenue"].sum()
 
-st.write(
-    f"Top {top_n_concentration} customers account for "
-    f"{top_n_share * 100:.1f}% of total revenue."
-)
+st.write(f"Top 10 customers account for {top10_share*100:.1f}% of revenue.")
 
-if top_n_share > concentration_threshold:
-    st.warning(
-        f"High revenue concentration risk: top {top_n_concentration} customers "
-        f"contribute more than {concentration_threshold * 100:.0f}% of revenue."
-    )
+if top10_share > 0.4:
+    st.warning("High concentration risk detected.")
     warnings_triggered.append("high_concentration")
 
-# Recommended actions based on triggered warnings
 if warnings_triggered:
     st.markdown("**Recommended Actions:**")
-    actions = []
     if "low_satisfaction" in warnings_triggered:
-        actions.append(
-            "- Implement service recovery programs and targeted satisfaction surveys for low-satisfaction segments."
-        )
-        actions.append(
-            "- Prioritize training and quality improvements in touchpoints serving these segments."
-        )
+        st.write("- Improve service recovery and customer experience for low-satisfaction segments.")
     if "low_engagement" in warnings_triggered:
-        actions.append(
-            "- Launch retention campaigns (personalized offers, loyalty benefits) for low-engagement segments."
-        )
-        actions.append(
-            "- Analyze channel and category preferences to design relevant cross-sell and up-sell journeys."
-        )
+        st.write("- Launch retention and re-engagement campaigns.")
     if "high_concentration" in warnings_triggered:
-        actions.append(
-            "- Diversify revenue base by nurturing mid-tier customers with growth potential."
-        )
-        actions.append(
-            "- Develop contingency plans and strategic account management for top customers."
-        )
-
-    for a in actions:
-        st.write(a)
+        st.write("- Diversify revenue by nurturing mid-tier customers.")
 
 
 # -----------------------------
-# Top Customers panel
+# Top Customers
 # -----------------------------
 st.markdown("---")
 st.subheader("Top Customers")
 
-top_n_choice = st.selectbox("Number of top customers to display", options=[5, 10, 20], index=1)
+top_n_choice = st.selectbox("Number of top customers to display", [5, 10, 20], index=1)
 
 cust_group = df_filtered.groupby(col_customerid)
 
-def most_frequent(series: pd.Series):
-    if series.empty:
-        return np.nan
-    return series.value_counts().idxmax()
+def most_frequent(series):
+    return series.value_counts().idxmax() if not series.empty else np.nan
 
 top_customers = cust_group.agg(
     total_revenue=(col_purchaseamount, "sum"),
@@ -483,31 +375,28 @@ top_customers = cust_group.agg(
 
 top_customers = top_customers.sort_values("total_revenue", ascending=False).head(top_n_choice)
 
-top_left, top_right = st.columns(2)
+lc, rc = st.columns(2)
 
-with top_left:
+with lc:
     st.write(f"Top {top_n_choice} Customers by Revenue")
     st.dataframe(top_customers, use_container_width=True)
 
-with top_right:
-    if not top_customers.empty:
-        fig_top_cust = px.bar(
-            top_customers,
-            x=col_customerid,
-            y="total_revenue",
-            title=f"Top {top_n_choice} Customers by Revenue",
-        )
-        fig_top_cust.update_layout(xaxis_title="Customer ID", yaxis_title="Total Revenue")
-        st.plotly_chart(fig_top_cust, use_container_width=True)
+with rc:
+    fig_top = px.bar(
+        top_customers,
+        x=col_customerid,
+        y="total_revenue",
+        title=f"Top {top_n_choice} Customers by Revenue"
+    )
+    st.plotly_chart(fig_top, use_container_width=True)
 
 
 # -----------------------------
-# Filtered data table
+# Filtered Data Table
 # -----------------------------
 st.markdown("---")
 st.subheader("Filtered Transactions")
 
-# Keep columns in a clean, readable order
 ordered_cols = [
     col_idx,
     col_transactionid,
