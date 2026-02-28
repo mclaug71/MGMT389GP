@@ -401,12 +401,40 @@ with lc:
     st.dataframe(top_customers, use_container_width=True)
 
 with rc:
+    st.subheader(f"Top {top_n_choice} Customers by Revenue")
+
     fig_top = px.bar(
         top_customers,
         x=col_customerid,
         y="total_revenue",
+        color="total_revenue",
+        color_continuous_scale="Blues",
         title=f"Top {top_n_choice} Customers by Revenue"
     )
+
+    fig_top.update_traces(
+        marker_line_width=1.2,
+        marker_line_color="black",
+        hovertemplate="<b>Customer:</b> %{x}<br><b>Revenue:</b> $%{y:,.2f}<extra></extra>"
+    )
+
+    fig_top.update_layout(
+        xaxis_title="Customer ID",
+        yaxis_title="Total Revenue",
+        coloraxis_showscale=False,
+        margin=dict(l=20, r=20, t=60, b=80),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(size=11)
+        ),
+        yaxis=dict(
+            tickfont=dict(size=11),
+            gridcolor="lightgray"
+        )
+    )
+
     st.plotly_chart(fig_top, use_container_width=True)
 
 
