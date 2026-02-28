@@ -290,35 +290,48 @@ seg_summary = (
         avg_satisfaction=(col_customersatisfaction, "mean"),
         revenue=(col_purchaseamount, "sum"),
         transactions=(col_transactionid, "nunique"),
-        unique_customers=(col_customerid, "nunique"),
+        unique_customers=(col_customerid, "nunique")
     )
     .reset_index()
 )
 
 overall_transactions = df_filtered[col_transactionid].nunique()
 overall_customers = df_filtered[col_customerid].nunique()
-overall_tx_per_customer = overall_transactions / overall_customers if overall_customers > 0 else np.nan
+overall_tx_per_customer = (
+    overall_transactions / overall_customers if overall_customers > 0 else np.nan
+)
 
 seg_tx = (
-    df_filtered.groupby(col_label)
+    df_filtered
+    .groupby(col_label)
     .agg(
         seg_transactions=(col_transactionid, "nunique"),
-        seg_customers=(col_customerid, "nunique"),
+        seg_customers=(col_customerid, "nunique")
     )
     .reset_index()
 )
-seg_tx["tx_per_customer"] = seg_tx["seg_transactions"] / seg_tx["seg_customers"]
-seg_summary = seg_summary.merge(seg_tx[[col_label, "tx_per_customer"]], on=col_label, how="left")
+
+seg_tx["tx_per_customer"] = (
+    seg_tx["seg_transactions"] / seg_tx["seg_customers"]
+).replace([np.inf, -np.inf], np.nan)
+
+seg_summary = seg_summary.merge(
+    seg_tx[[col_label, "tx_per_customer"]],
+    on=col_label,
+    how="left"
+)
 
 st.dataframe(seg_summary, use_container_width=True)
 
 warnings_triggered = []
 
+# Rule 1: Low satisfaction
 low_sat_segments = seg_summary[seg_summary["avg_satisfaction"] < 3.0][col_label].tolist()
 if low_sat_segments:
     st.warning(f"Low satisfaction detected in: {', '.join(low_sat_segments)}")
     warnings_triggered.append("low_satisfaction")
 
+# Rule 2: Low engagement
 low_eng_segments = seg_summary[
     seg_summary["tx_per_customer"] < overall_tx_per_customer
 ][col_label].tolist()
@@ -326,21 +339,28 @@ if low_eng_segments:
     st.warning(f"Lower engagement detected in: {', '.join(low_eng_segments)}")
     warnings_triggered.append("low_engagement")
 
+# Rule 3: Concentration risk
 cust_revenue = (
-    df_filtered.groupby(col_customerid, as_index=False)[col_purchaseamount]
+    df_filtered
+    .groupby(col_customerid, as_index=False)[col_purchaseamount]
     .sum()
     .rename(columns={col_purchaseamount: "revenue"})
     .sort_values("revenue", ascending=False)
 )
-top10 = cust_revenue.head(10)
-top10_share = top10["revenue"].sum() / cust_revenue["revenue"].sum()
 
-st.write(f"Top 10 customers account for {top10_share*100:.1f}% of revenue.")
+top10 = cust_revenue.head(10)
+top10_share = (
+    top10["revenue"].sum() / cust_revenue["revenue"].sum()
+    if cust_revenue["revenue"].sum() > 0 else 0
+)
+
+st.write(f"Top 10 customers account for {top10_share * 100:.1f}% of revenue.")
 
 if top10_share > 0.4:
     st.warning("High concentration risk detected.")
     warnings_triggered.append("high_concentration")
 
+# Recommended actions
 if warnings_triggered:
     st.markdown("**Recommended Actions:**")
     if "low_satisfaction" in warnings_triggered:
@@ -367,4 +387,51 @@ def most_frequent(series):
 top_customers = cust_group.agg(
     total_revenue=(col_purchaseamount, "sum"),
     transactions=(col_transactionid, "nunique"),
-    avg_satisfaction=(col_customersatisfaction
+    avg_satisfaction=(col_customersatisfaction, "mean"),
+    most_frequent_productcategory=(col_productcategory, most_frequent),
+    most_frequent_retailchannel=(col_retailchannel, most_frequent)
+).reset_index()
+
+top_customers = top_customers.sort_values("total_revenue", ascending=False).head(top_n_choice)
+
+lc, rc = st.columns(2)
+
+with lc:
+    st.write(f"Top {top_n_choice} Customers by Revenue")
+    st.dataframe(top_customers, use_container_width=True)
+
+with rc:
+    fig_top = px.bar(
+        top_customers,
+        x=col_customerid,
+        y="total_revenue",
+        title=f"Top {top_n_choice} Customers by Revenue"
+    )
+    st.plotly_chart(fig_top, use_container_width=True)
+
+
+# -----------------------------
+# Filtered Data Table
+# -----------------------------
+st.markdown("---")
+st.subheader("Filtered Transactions")
+
+ordered_cols = [
+    col_idx,
+    col_transactionid,
+    col_transactiondate,
+    col_customerid,
+    col_label,
+    col_productcategory,
+    col_purchaseamount,
+    col_customeragegroup,
+    col_customergender,
+    col_customerregion,
+    col_customersatisfaction,
+    col_retailchannel
+]
+
+ordered_cols = [c for c in ordered_cols if c in df_filtered.columns]
+df_display = df_filtered[ordered_cols].reset_index(drop=True)
+
+st.dataframe(df_display, use_container_width=True)
