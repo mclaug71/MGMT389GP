@@ -354,7 +354,8 @@ top10_share = (
     if cust_revenue["revenue"].sum() > 0 else 0
 )
 
-st.write(f"Top 10 customers account for {top10_share * 100:.1f}% of revenue.")
+# 🔥 YOUR REQUESTED CHANGE: Make this line yellow
+st.warning(f"Top 10 customers account for {top10_share * 100:.1f}% of revenue.")
 
 if top10_share > 0.4:
     st.warning("High concentration risk detected.")
